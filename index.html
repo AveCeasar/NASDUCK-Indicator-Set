@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Simulator</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 800px; margin: auto;}
+        h1 { color: #333; text-align: center; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;}
+        .input-group { margin-bottom: 5px; } /* Reduced margin for grid layout */
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input-group input {
+            width: 100%; /* Full width of grid cell */
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: right;
+        }
+        td:first-child { text-align: left; }
+        th { background-color: #e9e9e9; text-align: right; }
+        th:first-child { text-align: left; }
+        .results-header { margin-top: 30px; font-size: 1.5em; color: #555; text-align: center;}
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1em;
+            display: block;
+            margin: 20px auto 0 auto; /* Center button */
+        }
+        button:hover { background-color: #0056b3; }
+        #resultsTableReinvested, #resultsTableCompounding { margin-bottom: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trading Strategy Simulator</h1>
+        <p style="text-align: center; margin-top: -10px; margin-bottom: 20px;">
+            for <a href="https://nasduck.substack.com/p/nasduck-indicator-set" target="_blank" rel="noopener noreferrer">NASDUCK Indicator Set</a>
+        </p>
+
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="funds">Initial Funds ($):</label>
+                <input type="number" id="funds" name="funds" value="1000" step="any">
+            </div>
+
+            <div class="input-group">
+                <label for="takeProfit">Take Profit (%):</label>
+                <input type="number" id="takeProfit" name="takeProfit" value="4" step="any">
+            </div>
+
+            <div class="input-group">
+                <label for="stopLoss">Stop Loss (%):</label>
+                <input type="number" id="stopLoss" name="stopLoss" value="-4" step="any" title="Enter as a negative value, e.g., -4 for -4%">
+            </div>
+
+            <div class="input-group">
+                <label for="winRate">Expected Win Rate (%):</label>
+                <input type="number" id="winRate" name="winRate" value="60" min="0" max="100" step="any">
+            </div>
+
+            <div class="input-group">
+                <label for="feePercent">Fees/Slippage per Trade (%):</label>
+                <input type="number" id="feePercent" name="feePercent" value="0.5" step="any" min="0">
+            </div>
+        </div>
+        <small style="display:block; text-align:center; margin-bottom:15px;">
+            <em>Note: For "Take Profit" and "Stop Loss", percentages apply to initial funds for the "Fixed Bet Size" table, and to current funds for the "Compounding" table. Fees apply per trade.</em>
+        </small>
+
+
+        <button onclick="calculateResults()">Calculate Results</button>
+
+        <h2 class="results-header">Results with Fixed Bet Size (Based on Initial Funds)</h2>
+        <table id="resultsTableReinvested">
+            <thead>
+                <tr>
+                    <th>Number of Trades</th>
+                    <th>Expected Account Balance ($)</th>
+                    <th>Expected Profit/Loss ($)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>10</td><td id="reinvest_10_balance">-</td><td id="reinvest_10_profit">-</td></tr>
+                <tr><td>100</td><td id="reinvest_100_balance">-</td><td id="reinvest_100_profit">-</td></tr>
+                <tr><td>1000</td><td id="reinvest_1000_balance">-</td><td id="reinvest_1000_profit">-</td></tr>
+            </tbody>
+        </table>
+
+        <h2 class="results-header">Results with Compounding</h2>
+        <table id="resultsTableCompounding">
+            <thead>
+                <tr>
+                    <th>Number of Trades</th>
+                    <th>Expected Account Balance ($)</th>
+                    <th>Expected Profit/Loss ($)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>10</td><td id="compound_10_balance">-</td><td id="compound_10_profit">-</td></tr>
+                <tr><td>100</td><td id="compound_100_balance">-</td><td id="compound_100_profit">-</td></tr>
+                <tr><td>1000</td><td id="compound_1000_balance">-</td><td id="compound_1000_profit">-</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function calculateResults() {
+            const initialFunds = parseFloat(document.getElementById('funds').value);
+            const takeProfitPercent = parseFloat(document.getElementById('takeProfit').value) / 100;
+            const stopLossPercentInput = parseFloat(document.getElementById('stopLoss').value); // Get value as entered
+            const stopLossPercent = stopLossPercentInput / 100; // Convert to decimal for calculation
+            const winRate = parseFloat(document.getElementById('winRate').value) / 100;
+            const feePercentPerTrade = parseFloat(document.getElementById('feePercent').value) / 100;
+
+            if (isNaN(initialFunds) || isNaN(takeProfitPercent) || isNaN(stopLossPercent) || isNaN(winRate) || isNaN(feePercentPerTrade)) {
+                alert("Please ensure all fields are filled with valid numbers.");
+                return;
+            }
+            if (winRate < 0 || winRate > 1) {
+                alert("Win rate must be between 0 and 100.");
+                return;
+            }
+            if (takeProfitPercent <= 0) {
+                alert("Take Profit must be a positive percentage.");
+                return;
+            }
+            if (stopLossPercentInput >= 0) { // Validate original input
+                alert("Stop Loss must be a negative percentage (e.g., -4).");
+                return;
+            }
+            if (feePercentPerTrade < 0) {
+                alert("Fees/Slippage must be a non-negative percentage.");
+                return;
+            }
+
+            const tradeCounts = [10, 100, 1000];
+
+            // --- Calculate Reinvested (Fixed Bet Size based on Initial Funds) ---
+            const fixedWinAmount = initialFunds * takeProfitPercent;
+            const fixedLossAmount = initialFunds * stopLossPercent; // stopLossPercent is negative
+            const feeAmountPerTradeFixed = initialFunds * feePercentPerTrade; // Fee based on initial funds for fixed bet
+
+            tradeCounts.forEach(numTrades => {
+                // Expected gain from trade outcome (win/loss) minus the fee per trade
+                const expectedNetGainPerTradeReinvest = (winRate * fixedWinAmount) + ((1 - winRate) * fixedLossAmount) - feeAmountPerTradeFixed;
+                let expectedBalance = initialFunds + (expectedNetGainPerTradeReinvest * numTrades);
+                
+                // While mathematically expectation can be negative, an account balance cannot.
+                // However, for "expected value", it's common to show the pure mathematical outcome.
+                // If a floor of 0 is desired for display: expectedBalance = Math.max(0, expectedBalance);
+                // For this model, we'll allow display of mathematical expectation even if negative.
+
+                document.getElementById(`reinvest_${numTrades}_balance`).textContent = expectedBalance.toFixed(2);
+                document.getElementById(`reinvest_${numTrades}_profit`).textContent = (expectedBalance - initialFunds).toFixed(2);
+            });
+
+            // --- Calculate Compounding (Bet Size based on Current Funds) ---
+            tradeCounts.forEach(numTrades => {
+                // Expected Return Factor per Trade for compounding, including fees
+                // After a win: currentFunds * (1 + takeProfitPercent). After fee: currentFunds * (1 + takeProfitPercent) * (1 - feePercentPerTrade)
+                // After a loss: currentFunds * (1 + stopLossPercent). After fee: currentFunds * (1 + stopLossPercent) * (1 - feePercentPerTrade)
+                const factorWinWithFee = (1 + takeProfitPercent) * (1 - feePercentPerTrade);
+                const factorLossWithFee = (1 + stopLossPercent) * (1 - feePercentPerTrade); // stopLossPercent is negative
+                
+                const avgReturnFactorPerTrade = (winRate * factorWinWithFee) + ((1 - winRate) * factorLossWithFee);
+                
+                let expectedCompoundedBalance;
+                let profitLossText;
+
+                if (avgReturnFactorPerTrade <= 0 && numTrades > 0) { 
+                    // If avg factor is 0, after 1 trade it's 0. If <0, it's problematic for multi-step.
+                    // Let's consider 1 trade: balance = initialFunds * avgReturnFactorPerTrade.
+                    // If avgReturnFactorPerTrade is 0, balance = 0.
+                    // If avgReturnFactorPerTrade < 0, balance is negative. This could be displayed for 1 trade.
+                    // For N > 1, it indicates high risk of ruin or nonsensical values with Math.pow.
+                    if (numTrades === 1 && avgReturnFactorPerTrade < 0) {
+                         expectedCompoundedBalance = initialFunds * avgReturnFactorPerTrade;
+                         if (expectedCompoundedBalance < 0) expectedCompoundedBalance = 0; // Cap at 0 for display
+                    } else if (avgReturnFactorPerTrade == 0) {
+                         expectedCompoundedBalance = 0;
+                    }
+                    else {
+                        document.getElementById(`compound_${numTrades}_balance`).textContent = "N/A (Ruin Risk)";
+                        document.getElementById(`compound_${numTrades}_profit`).textContent = "N/A";
+                        return; // Skip to next numTrades
+                    }
+                } else {
+                    expectedCompoundedBalance = initialFunds * Math.pow(avgReturnFactorPerTrade, numTrades);
+                }
+
+                // An account balance physically cannot go below 0 unless leverage implies debt.
+                // For this model, let's assume 0 is the floor.
+                if (expectedCompoundedBalance < 0 || !isFinite(expectedCompoundedBalance)) {
+                    expectedCompoundedBalance = 0;
+                }
+                
+                document.getElementById(`compound_${numTrades}_balance`).textContent = expectedCompoundedBalance.toFixed(2);
+                document.getElementById(`compound_${numTrades}_profit`).textContent = (expectedCompoundedBalance - initialFunds).toFixed(2);
+            });
+        }
+
+        // Optional: Calculate on page load with default values
+        window.onload = function() {
+            // Pre-fill with defaults and calculate if needed, or wait for button click
+            // For now, let's just ensure defaults are there and calculation is via button.
+            // If you want to auto-calculate on load:
+            // calculateResults();
+        };
+    </script>
+</body>
+</html>
