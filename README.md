@@ -1,0 +1,1 @@
+# NASDUCK-Indicator-Set
